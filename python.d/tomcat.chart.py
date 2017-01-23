@@ -37,14 +37,16 @@ CHARTS = {
         ]}
 }
 
-
 class Service(UrlService):
     def __init__(self, configuration=None, name=None):
         UrlService.__init__(self, configuration=configuration, name=name)
         self.url = self.configuration.get('url', "http://127.0.0.1:8080/manager/status?XML=true")
         self.order = ORDER
         self.definitions = CHARTS
-        self.regex = compile(r'([\w]+)=\\?[\'\"](\d+)\\?[\'\"]')
+        self.port = compile(r'(?:http://.*?:)(\d*)(?:/)').search(self.url).groups()[0]
+        self.jvm_regex = compile(r'(?:jvm>)(.*?)(</jvm)')
+        self.inner_regex = compile(r'([\w]+)=\\?[\'\"](\d+)\\?[\'\"]')
+        self.outer_regex = compile(r'(?:name=\'"http-\w{3}-' + escape(self.port) + u'"\')(.*?)(?:<\/connector)')
 
     def check(self):
         if not self.url.endswith('manager/status?XML=true'):
@@ -59,6 +61,9 @@ class Service(UrlService):
         :return: dict
         """
         data = self._get_raw_data()
-        if data: data = dict(self.regex.findall(data))
-        
+        if data:
+            jvm_data = self.jvm_regex.search(data).groups()[0]
+            connection_data = self.outer_regex.search(data).groups()[0]
+            relevant_data = jvm_data + connection_data
+            data = dict(self.inner_regex.findall(relevant_data))
         return data or None
