@@ -3,7 +3,7 @@
 # Author: Pawel Krupa (paulfantom)
 
 from base import UrlService
-from re import compile
+from re import compile, escape
 
 # default module values (can be overridden per job in `config`)
 # update_every = 2
