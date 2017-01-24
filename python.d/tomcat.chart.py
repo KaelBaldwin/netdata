@@ -5,6 +5,11 @@
 from base import UrlService
 from re import compile, escape
 
+try:
+    from urlparse import urlparse
+except ImportError:
+    from urllib.parse import urlparse
+
 # default module values (can be overridden per job in `config`)
 # update_every = 2
 priority = 60000
@@ -43,16 +48,20 @@ class Service(UrlService):
         self.url = self.configuration.get('url', "http://127.0.0.1:8080/manager/status?XML=true")
         self.order = ORDER
         self.definitions = CHARTS
-        self.port = compile(r'(?:http://.*?:)(\d*)(?:/)').search(self.url).groups()[0]
-        self.jvm_regex = compile(r'(?:jvm>)(.*?)(</jvm)')
-        self.inner_regex = compile(r'([\w]+)=\\?[\'\"](\d+)\\?[\'\"]')
-        self.outer_regex = compile(r'(?:name=\'"http-\w{3}-' + escape(self.port) + u'"\')(.*?)(?:<\/connector)')
 
     def check(self):
         if not self.url.endswith('manager/status?XML=true'):
             self.error('Bad url(%s). Must be http://<ip.address>:<port>/manager/status?XML=true' % self.url)
             return False
 
+        netloc = urlparse(self.url).netloc.rpartition(':')
+        if netloc[1] == ':': port = netloc[2]
+        else: port = 80
+        
+        self.regex_jvm = compile(r'<jvm>.*?</jvm>')
+        self.regex_connector = compile(r'[a-z-]+%s.*?/connector' % port)
+        self.regex = compile(r'([\w]+)=\\?[\'\"](\d+)\\?[\'\"]')
+        
         return UrlService.check(self)
 
     def _get_data(self):
@@ -62,8 +71,8 @@ class Service(UrlService):
         """
         data = self._get_raw_data()
         if data:
-            jvm_data = self.jvm_regex.search(data).groups()[0]
-            connection_data = self.outer_regex.search(data).groups()[0]
-            relevant_data = jvm_data + connection_data
-            data = dict(self.inner_regex.findall(relevant_data))
+            jvm = self.regex_jvm.findall(data) or ['']
+            connector = self.regex_connector.findall(data) or ['']
+            data = dict(self.regex.findall(''.join([jvm[0], connector[0]])))
         return data or None
+
