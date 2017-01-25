@@ -36,9 +36,10 @@ CHARTS = {
             ["currentThreadsBusy", 'busy', "absolute"]
         ]},
     'jvm': {
-        'options': [None, "JVM Free Memory", "MB", "statistics", "tomcat.jvm", "area"],
+        'options': [None, "Heap", "MB", "statistics", "tomcat.jvm", "line"],
         'lines': [
-            ["free", None, "absolute", 1, 1048576]
+            ["max", None, "absolute", 1, 1048576],
+            ["used", None, "absolute", 1, 1048576]
         ]}
 }
 
@@ -57,11 +58,11 @@ class Service(UrlService):
         netloc = urlparse(self.url).netloc.rpartition(':')
         if netloc[1] == ':': port = netloc[2]
         else: port = 80
-        
+
         self.regex_jvm = compile(r'<jvm>.*?</jvm>')
         self.regex_connector = compile(r'[a-z-]+%s.*?/connector' % port)
         self.regex = compile(r'([\w]+)=\\?[\'\"](\d+)\\?[\'\"]')
-        
+
         return UrlService.check(self)
 
     def _get_data(self):
@@ -74,5 +75,8 @@ class Service(UrlService):
             jvm = self.regex_jvm.findall(data) or ['']
             connector = self.regex_connector.findall(data) or ['']
             data = dict(self.regex.findall(''.join([jvm[0], connector[0]])))
+        totalMem = int(data[u'total'])
+        freeMem = int(data[u'free'])
+        usedMem = totalMem - freeMem
+        data[u'used'] = usedMem
         return data or None
-
